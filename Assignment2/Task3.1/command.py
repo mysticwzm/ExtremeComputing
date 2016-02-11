@@ -1,0 +1,2 @@
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task2/logsLarge.txt -output /user/s1413178/data/output/assignment2/task3.1.1 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task3.1.1 -output /user/s1413178/data/output/assignment2/task3.1 -mapper mapperTop.py -file mapperTop.py -reducer reducerTop.py -file reducerTop.py -numReduceTasks 1

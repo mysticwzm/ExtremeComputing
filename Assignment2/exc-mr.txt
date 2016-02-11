@@ -1,0 +1,769 @@
+Task 1 code begin
+
+mapper.py:
+#!/usr/bin/python
+
+import sys,re,os
+
+#get the name of current file
+file_name = os.environ['map_input_file'].strip().split('/')[-1]
+#dictionary used as an in-mapper combiner
+d = {}
+for line in sys.stdin:
+    line = line.strip()
+    #just extract the words purely consist of upper&lower characters
+    tokens = re.findall('[A-Za-z]+',line)
+    #put the extracted words into dictionary
+    for token in tokens:
+        if token in d:
+            d[token] = d[token] + 1
+        else:
+            d.update({token:1})
+        # when the size of dictionary is up to 100, output all elements in it and clear itself
+        # so that the memory won't be used up
+        if len(d) == 100:
+            for key in d:
+                print '%s\t%s' % (key,file_name + '\t' + str(d[key]))
+            d.clear()
+#output the elements which are still in dictionary
+if len(d) > 0:
+    for key in d:
+        print '%s\t%s' % (key,file_name + '\t' + str(d[key]))
+    d.clear()
+
+reducer.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+#dictionary used to store the times of appearance in all documents for a word
+d = {}
+#get the word,which document it is from and the times of appearance
+preTerm,file_name,value = sys.stdin.readline().strip().split('\t')
+value = int(value)
+#put the time of appearance into the dictionary
+if file_name in d:
+    d[file_name] = d[file_name] + value
+else:
+    d.update({file_name:value})
+for line in sys.stdin:
+    #get the word,which document it is from and the times of appearance
+    term,file_name,value = line.strip().split('\t')
+    value = int(value)
+    #put the time of appearance into the dictionary
+    if preTerm == term:
+        if file_name in d:
+            d[file_name] = d[file_name] + value
+        else:
+            d.update({file_name:value})
+    #output the details of current word
+    else:
+        printString = preTerm + ' : ' + str(len(d)) + ' : {'
+        for i in range(0,18):
+            key = 'd' + str(i) + '.txt'
+            if key in d:
+                printString = printString + '(' + key + ', ' + str(d[key]) + '), '
+        printString = printString[:-2] + '}'
+        print printString
+        #start the statistics for the new word
+        preTerm = term
+        d.clear()
+        d.update({file_name:value})
+#output the details of the last word
+printString = preTerm + ' : ' + str(len(d)) + ' : {'
+for i in range(0,18):
+    key = 'd' + str(i) + '.txt'
+    if key in d:
+        printString = printString + '(' + key + ', ' + str(d[key]) + '), '
+printString = printString[:-2] + '}'
+print printString
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task1/large -output /user/s1413178/data/output/assignment2/task1 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+
+Task 1 code end
+
+Task 1 results begin
+
+ABOO : 1 : {(d12.txt, 2)}
+AGAINST : 1 : {(d10.txt, 1)}
+AGOUST : 1 : {(d10.txt, 1)}
+ALIVE : 1 : {(d9.txt, 1)}
+AMBER : 1 : {(d9.txt, 1)}
+ANDREA : 1 : {(d14.txt, 1)}
+ANGEL : 1 : {(d12.txt, 2)}
+ANOTHER : 1 : {(d17.txt, 1)}
+AT : 6 : {(d1.txt, 3), (d2.txt, 1), (d3.txt, 1), (d12.txt, 3), (d13.txt, 1), (d17.txt, 4)}
+AUCH : 1 : {(d10.txt, 1)}
+
+Task 1 results end
+
+Task 2 code begin
+
+mapper.py
+#!/usr/bin/python
+
+import sys
+
+#the set to store the words from terms.txt
+dic = set()
+d = 'd1.txt'
+#add all words in terms.txt to the set
+for line in file('terms.txt'):
+    line = line.strip()
+    dic.add(line)
+for line in sys.stdin:
+    word,idf,tf = line.strip().split(' : ')
+    #when the current word is a word in the set
+    if word in dic:
+        #and this word appears in d1.txt
+        if d in tf:
+            #output its value of tf and idf, and remove this word from set
+            tf = tf.strip().split(', ',1)[1].split(')',1)[0]
+            print '%s\t%s' % (word,tf + '\t' + idf)
+            dic.remove(word)
+#if there are any words reamaining in the set, then output its tf and idf as 0 and 0
+#because these words do not appear in d1.txt and its score should be 0 
+for word in dic:
+    print ('%s\t%s' % (word,'0\t0'))
+
+reducer.py:
+#!/usr/bin/python
+
+import sys,math
+from operator import itemgetter
+
+#two dictionaries to store the tfs and idfs
+d_tf = {}
+d_idf = {}
+for line in sys.stdin:
+    #get the word and its value of tf&idf from mapper
+    word,values = line.strip().split('\t',1)
+    tf,idf = values.strip().split('\t')
+    tf = float(tf)
+    idf = float(idf)
+    #put the value of tf&idf into dictionaries
+    if word in d_tf:
+        d_tf[word] = d_tf[word] + tf
+        d_idf[word] = d_idf[word] +idf
+    else:
+        d_tf.update({word:tf})
+        d_idf.update({word:idf})
+#output the scores
+for word in d_tf:
+    score = str(d_tf[word] * math.log10(17 / (1 + d_idf[word])))
+    print '%s' % (word + ', d1.txt = ' + score)
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task1 -output /user/s1413178/data/output/assignment2/task2 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py -file terms.txt -numReduceTasks 1
+
+Task 2 code end
+
+Task 2 results begin
+
+horse, d1.txt = 2.9512309995
+Lassiter, d1.txt = 0.0
+family, d1.txt = 1.57637220736
+child, d1.txt = 2.63289387223
+monument, d1.txt = 0.770701762728
+electronic, d1.txt = 0.0
+agreement, d1.txt = 2.12591566817
+
+Task 2 results end
+
+Task 3.1 code begin
+
+mapper.py:
+#!/usr/bin/python
+
+import sys
+
+#dictionary used as an in-mapper combiner
+d = {}
+for line in sys.stdin:
+    #get the name of page
+    request = line.strip().split('"')[1]
+    if len(request.split()) == 3:
+        page = request.split()[1]
+        #put this page into dictionary
+        if page in d:
+            d[page] = d[page] + 1
+        else:
+            d.update({page:1})
+        # when the size of dictionary is up to 100, output all elements in it and clear itself
+        # so that the memory won't be used up
+        if len(d) == 100:
+            for key in d:
+                print '%s\t%s' % (key,d[key])
+            d.clear()
+#output the elements which are still in the dictionary
+for key in d:
+    print '%s\t%s' % (key,d[key])
+d.clear()
+
+reducer.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+prePage,value = sys.stdin.readline().strip().split('\t')
+count = int(value)
+max_count = 0
+max_page = ''
+for line in sys.stdin:
+    #get the name of page and its visited times
+    page,value = line.strip().split('\t')
+    value = int(value)
+    if page == prePage:
+        count = count + value
+    #compare the total visited times with the maximum visited times
+    #if it is more than the maximum visited times, update it
+    else:
+        if count > max_count:
+            max_count = count
+            max_page = prePage
+        prePage = page
+        count = value
+#compare the total visited times of the last page with maximum visited times 
+if count > max_count:
+    max_count = count
+    max_page = prePage
+#output the page which has been visited most
+print '%s\t%s' % (max_page,max_count)
+
+mapperTop.py:
+#!/usr/bin/python
+
+import sys
+
+#emit the result from last reducer
+for line in sys.stdin:
+    print line.strip()
+
+reducerTop.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+#find the page from 10 candidates/files
+max_page = ''
+max_count = 0
+for line in sys.stdin:
+    page,value = line.strip().split('\t')
+    value = int(value)
+    if value > max_count:
+        max_count = value
+        max_page = page
+print max_page
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task2/logsLarge.txt -output /user/s1413178/data/output/assignment2/task3.1.1 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task3.1.1 -output /user/s1413178/data/output/assignment2/task3.1 -mapper mapperTop.py -file mapperTop.py -reducer reducerTop.py -file reducerTop.py -numReduceTasks 1
+
+Task 3.1 code end
+
+Task 3.1 results begin
+
+/images/NASA-logosmall.gif
+
+Task 3.1 results end
+
+Task 3.2 code begin
+
+mapper.py:
+#!/usr/bin/python
+
+import sys
+
+#dictionary used as an in-mapper combiner
+d = {}
+for line in sys.stdin:
+    reply = line.strip().split('"')[-1].strip().split()[0]
+    #find the log record with 404 reply
+    if reply == '404':
+        #get the name of host
+        site = line.strip().split(' - - ')[0]
+        #put this host into dictionary
+        if site in d:
+            d[site] = d[site] + 1
+        else:
+            d.update({site:1})
+        # when the size of dictionary is up to 100, output all elements in it and clear itself
+        # so that the memory won't be used up
+        if len(d) == 100:
+            for key in d:
+                print '%s\t%s' % (key,d[key])
+            d.clear()
+#output the elements which are still in the dictionary
+for key in d:
+    print '%s\t%s' % (key,d[key])
+d.clear()
+
+reducer.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+#get the name of host and its number of 404 reply
+preSite,preValue = sys.stdin.readline().strip().split('\t')
+count = int(preValue)
+for line in sys.stdin:
+    site,value = line.strip().split('\t')
+    value = int(value)
+    #add up the number of 404 replys of the same host
+    if preSite == site:
+        count = count + value
+    #output the total number of 404 replys of the previous host and its name
+    #and start the statistics for the new host
+    else:
+        print '%s\t%s' % (count,preSite)
+        count = value
+        preSite = site
+#output the total number of 404 replys of the last host and its name 
+print '%s\t%s' % (count,preSite)
+
+mapperTop10.py:
+#!/usr/bin/python
+
+import sys
+
+for line in sys.stdin:
+    count,site = line.strip().split('\t')
+    #in order to sort from high to low, I use 9999999 which is a 'big' number
+    #to minus the number of 404 replys of each host
+    #the bigger the number of 404 replys is, the smaller result got after the minus
+    count = str(9999999 - int(count))
+    print '%s\t%s' % (count,site)
+
+reducerTop10.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+index = 0
+for line in sys.stdin:
+    count,site = line.strip().split('\t')
+    #output the top 10 hosts which produced the most 404 HTTP errors
+    if index < 10:
+        index = index + 1
+        print site
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task2/logsLarge.txt -output /user/s1413178/data/output/assignment2/task3.2.1 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task3.2.1 -output /user/s1413178/data/output/assignment2/task3.2 -mapper mapperTop10.py -file mapperTop10.py -reducer reducerTop10.py -file reducerTop10.py -numReduceTasks 1
+
+Task 3.2 code end
+
+Task 3.2 results begin
+
+dialip-217.den.mmc.com
+piweba3y.prodigy.com
+155.148.25.4
+maz3.maz.net
+gate.barr.com
+204.62.245.32
+nexus.mlckew.edu.au
+ts8-1.westwood.ts.ucla.edu
+m38-370-9.mit.edu
+scooter.pa-x.dec.com
+
+Task 3.2 results end
+
+Task 3.3 code begin
+
+mapper.py:
+#!/usr/bin/python
+
+import sys
+
+for line in sys.stdin:
+    #emit the name of host and the visited time
+    time = line.strip().split(' - - ')[1].split(']')[0].split(' ')[0][1:]
+    site = line.strip().split(' - - ')[0]
+    if len(time) == 20:
+        print '%s\t%s' % (site,time)
+
+reducer.py:
+#!/usr/bin/python
+
+import sys,datetime
+from operator import itemgetter
+
+preSite,time = sys.stdin.readline().strip().split('\t')
+#the last visited time
+time_last = datetime.datetime.strptime(time,'%d/%b/%Y:%H:%M:%S')
+#the first visited time
+time_first = time_last
+#number of visited times
+count = 1
+for line in sys.stdin:
+    site,time = line.strip().split('\t')
+    time_temp = datetime.datetime.strptime(time,'%d/%b/%Y:%H:%M:%S')
+    if preSite == site:
+        #if the current time is later than the last visited time,update
+        if time_temp > time_last:
+            time_last = time_temp
+        #if the current time is earlier than the first visited time,update
+        if time_temp < time_first:
+            time_first = time_temp
+        #number of visited times added by 1
+        count = count + 1
+    else:
+        #output the time difference
+        if time_first != time_last:
+            print '%s\t%s' % (preSite,time_last - time_first)
+        else:
+            #if this host just has been visited once, then output the timestamp when it was visited
+            if count == 1:
+                print '%s\t%s' % (preSite,time_first)
+            #or output the time difference,although this host has been visited more than once
+            #but all visits are in a same time
+            else:
+                print '%s\t%s' % (preSite,time_last - time_first)
+        #start the statistics for the new host
+        preSite = site
+        time_last = time_temp
+        time_first = time_temp
+        count = 1
+#output the time difference or timestamp of the last host
+if time_first != time_last:
+    print '%s\t%s' % (preSite,time_last - time_first)
+else:
+    if count == 1:
+        print '%s\t%s' % (preSite,time_first)
+    else:
+        print '%s\t%s' % (preSite,time_last - time_first)
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task2/logsLarge.txt -output /user/s1413178/data/output/assignment2/task3.3 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+
+Task 3.3 code end
+
+Task 3.3 results begin
+
+01-dynamic-c.wokingham.luna.net 0:47:13
+1.ts1.mnet.medstroms.se 3 days, 0:53:00
+107.tcom.co.uk  0:00:49
+12-102md.acs.calpoly.edu        0:18:32
+12.ts1.mnet.medstroms.se        1995-08-09 04:37:50
+128.102.143.214 0:00:03
+128.102.147.16  8 days, 23:58:42
+128.102.244.7   0:03:12
+128.102.85.22   0:00:07
+128.103.127.163 0:00:42
+
+Task 3.3 results end
+
+Task 4.1 code begin
+
+mapper.py:
+#!/usr/bin/python
+
+import sys
+
+questionType = 'PostTypeId="1"'
+for line in sys.stdin:
+    if questionType in line:
+        if 'ViewCount' in line and 'Id' in line:
+            #get the number of viewcount and id of question
+            viewCount = line.strip().split('ViewCount="',1)[1].split('"',1)[0]
+            questionId = line.strip().split('Id="',1)[1].split('"',1)[0]
+            #in order to sort from high to low, I use 999999999 which is a 'big' number
+            #to minus the number of viewcount of each log
+            #the bigger the number of viewcount is, the smaller result got after the minus
+            viewCount = 999999999 - int(viewCount)
+            print "%s\t%s" % (viewCount,questionId)
+
+reducer.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+index = 0
+for line in sys.stdin:
+    #output the top 10 numbers of viewcount and ids of question
+    if index < 10:
+        index = index + 1
+        print line.strip()
+
+mapperTop10.py:
+#!/usr/bin/python
+
+import sys
+
+#emit the result from last reducer
+for line in sys.stdin:
+    print line.strip()
+
+reducerTop10.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+index = 0
+for line in sys.stdin:
+    #output the top 10 ids of question and numbers of viewcount
+    if index < 10:
+        index = index + 1
+        viewCount,questionId = line.strip().split('\t',1)
+        #999999999 minus the number of viewcount again to restore the original number of viewcount
+        viewCount = 999999999 - int(viewCount)
+        print '%s\t%s' % (questionId + ',\t',viewCount)
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task3/stackLarge.txt -output /user/s1413178/data/output/assignment2/task4.1.1 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task4.1.1 -output /user/s1413178/data/output/assignment2/task4.1 -mapper mapperTop10.py -file mapperTop10.py -reducer reducerTop10.py -file reducerTop10.py -numReduceTasks 1
+
+Task 4.1 code end
+
+Task 4.1 results begin
+
+184618,         1782717
+503093,         1240007
+25969,          1075873
+194812,         1058604
+426258,         989328
+363681,         978463
+114543,         962440
+134845,         938463
+306583,         913899
+63447,          868645
+
+Task 4.1 results end
+
+Task 4.2 code begin
+
+mapper.py:
+#!/usr/bin/python
+
+import sys
+
+questionType = 'PostTypeId="2"'
+for line in sys.stdin:
+    if questionType in line:
+        if 'OwnerUserId' in line and 'ParentId' in line:
+            #get the owneruserid and the id of question this answer applied to
+            OwnerUserId = line.strip().split('OwnerUserId="',1)[1].split('"',1)[0]
+            PostId = line.strip().split('ParentId="',1)[1].split('"',1)[0]
+            print '%s\t%s' % (OwnerUserId,PostId)
+
+reducer.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+preOwnerUserId, prePostId = sys.stdin.readline().strip().split('\t',1)
+count = 1
+PostIds = prePostId
+maxCount = 1
+maxOwnerUserId = preOwnerUserId
+maxPostIds = prePostId
+for line in sys.stdin:
+    OwnerUserId,PostId = line.strip().split('\t',1)
+    #if it is the same owneruserid, add the number of answers by 1
+    #and update the string of postids
+    if preOwnerUserId == OwnerUserId:
+        count = count + 1
+        PostIds = PostIds + ', ' + PostId
+    #if the number of answers of this owneruserid, update all maximum variables
+    else:
+        if count > maxCount:
+            maxCount = count
+            maxOwnerUserId = preOwnerUserId
+            maxPostIds = PostIds
+        preOwnerUserId = OwnerUserId
+        count = 1
+        PostIds = PostId
+#compare the number of answers of last owneruserid
+if count > maxCount:
+    maxCount = count
+    maxOwnerUserId = preOwnerUserId
+    maxPostIds = PostIds
+#output the owneruserid with maximum number of answers and its string of postids
+print '%s\t%s' % (maxOwnerUserId,maxPostIds)
+
+mapperTop.py:
+#!/usr/bin/python
+
+import sys
+
+#emit the result from last reducer
+for line in sys.stdin:
+    print line.strip()
+
+reducerTop.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+maxCount = 0
+maxOwnerUserId = ''
+maxPostIds = ''
+for line in sys.stdin:
+    OwnerUserId,PostIds = line.strip().split('\t',1)
+    parts = len(PostIds.strip().split())
+    #find the owneruserid which has maximum number of answers among 10 ownerusersids
+    if parts > maxCount:
+        maxOwnerUserId = OwnerUserId
+        maxPostIds = PostIds
+        maxCount = parts
+#output the final result
+print maxOwnerUserId + '\t->\t' + maxPostIds   
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task3/stackLarge.txt -output /user/s1413178/data/output/assignment2/task4.2.1 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task4.2.1 -output /user/s1413178/data/output/assignment2/task4.2 -mapper mapperTop.py -file mapperTop.py -reducer reducerTop.py -file reducerTop.py -numReduceTasks 1
+
+Task 4.2 code end
+
+Task 4.2 results begin
+
+22656   ->      157254, 164192, 148074, 148078, 183473, 155378, 171664, 182600, 148882, 187989, 174662, 141467, 185987, 176196, 178333, 187742, 197482, 155260, 190227, 169220, 194464, 186007, 187695, 155458, 9033, 187983, 194304, 196094, 137454, 187633, 197005, 174585, 190299, 155209, 137688, 162696, 156369, 188120, 156430, 169378, 177363, 159705, 187602, 168150, 187576, 162335, 197174, 188134, 188141, 186082, 144783, 193873, 162303, 191333, 186115, 154112, 188184, 145371, 178255, 149211, 183315, 197182, 148298, 153048, 141423, 164468, 145509, 187414, 181427, 151936, 162112, 191153, 183479, 139592, 194676, 144516, 192121, 164425, 183685, 187289, 142003, 139592, 131871, 139260, 178516, 182749, 153573, 162727, 149233, 183856, 162571, 162007, 195606, 190376, 177836, 163183, 161942, 185124, 156815, 171717, 191151, 177506, 152613, 188510, 155780, 178976, 185072, 152313, 171332, 164643, 187068, 144176, 186964, 179337, 164369, 161822, 174498, 186385, 182440, 178188, 183250, 188688, 194496, 145856, 139837, 188693, 177835, 154680, 176264, 164144, 161633, 143947, 173272, 194436, 177538, 186891, 143997, 157055, 197241, 137448, 188769, 178888, 152900, 173080, 146155, 186467, 196936, 154551, 176106, 192599, 181643, 174155, 146204, 154463, 154489, 178026, 183033, 197302, 197297, 176267, 182683, 157557, 161184, 190936, 194165, 194528, 154483, 161231, 188977, 185690, 193731, 188864, 183367, 186643, 146358, 157198, 186523, 168169, 177373, 168393, 186653, 162879, 157219, 161556, 186527, 161432, 157354, 186600, 161477, 194450, 338262, 287899, 288061, 356972, 356785, 287646, 288794, 288808, 287684, 287663, 287598, 287592, 356091, 289307, 355875, 355933, 287551, 289496, 289452, 355787, 355620, 355340, 289770, 289845, 355282, 290061, 290189, 290238, 290227, 290304, 290527, 358196, 290645, 358546, 290602, 290819, 358645, 358654, 291080, 358714, 353491, 291286, 291340, 353342, 291387, 291413, 291415, 353224, 353131, 287195, 353028, 358894, 287178, 291828, 287142, 352618, 352592, 352471, 352472, 352433, 352415, 352234, 359085, 352266, 292265, 352177, 352117, 352089, 287037, 359206, 292676, 292536, 359320, 292988, 293007, 350991, 293114, 293256, 293254, 359436, 350240, 350120, 293814, 293882, 293900, 293905, 293916, 349904, 294138, 349742, 359625, 349724, 294171, 294216, 349442, 349460, 349410, 349369, 294553, 349280, 349256, 349251, 349192, 359732, 348964, 295005, 286632, 295017, 295128, 295110, 295161, 286605, 295224, 295287, 286533, 295387, 295402, 348175, 348120, 348122, 348037, 295579, 286481, 295593, 286508, 295626, 295670, 295731, 295736, 295749, 347156, 347235, 347242, 360111, 359935, 286399, 360151, 346762, 346365, 346722, 346721, 296650, 360234, 360241, 296755, 296783, 346313, 346211, 296978, 345562, 297471, 298139, 344630, 298277, 298289, 298305, 344503, 298458, 344380, 298503, 344363, 344327, 344034, 343968, 343869, 343852, 298972, 298976, 343684, 343675, 299117, 299135, 299129, 343457, 343466, 343491, 343457, 343366, 343358, 299439, 299475, 299515, 343100, 299703, 285846, 299950, 299987, 300055, 342270, 285793, 342268, 342151, 342106, 342080, 341971, 341957, 341949, 341847, 300402, 300376, 341848, 300489, 300499, 341029, 361371, 301393, 301365, 301354, 301510, 301618, 340525, 285523, 340546, 340507, 301809, 340298, 340128, 301960, 340090, 301965, 302032, 302037, 339952, 339912, 302096, 339862, 302157, 339792, 339747, 339755, 302303, 302371, 339699, 285292, 302476, 285238, 338895, 338712, 285177, 303502, 285087, 338024, 337903, 337925, 337744, 337702, 337334, 337254, 337239, 362042, 362059, 362112, 362111, 337165, 284896, 337144, 337121, 362124, 337029, 337038, 362150, 336884, 304389, 304483, 304488, 336831, 336775, 336781, 336755, 304640, 336649, 304770, 304782, 304816, 336414, 304859, 336387, 304967, 362224, 305154, 305140, 305244, 305358, 335807, 305393, 362326, 305519, 362278, 335517, 305651, 335450, 305755, 284678, 305911, 362424, 306085, 362441, 306212, 334838, 334779, 334658, 334579, 334415, 334179, 362555, 333953, 333829, 333736, 362632, 333737, 333655, 333280, 333364, 333242, 333151, 284093, 362719, 284336, 362740, 307984, 308061, 308427, 308683, 308954, 362955, 308986, 309071, 331217, 309161, 284063, 309286, 330963, 309496, 309553, 309631, 330622, 309706, 309734, 330502, 309939, 330318, 330155, 329203, 329129, 329029, 283749, 363549, 283763, 363596, 363569, 283679, 283669, 311363, 311710, 327916, 283487, 327460, 312184, 312103, 327332, 327286, 312471, 283511, 283513, 364009, 283487, 283492, 326820, 283476, 326757, 326648, 313036, 313062, 326390, 313111, 313127, 283374, 326223, 364155, 313584, 326098, 313729, 313753, 313910, 325725, 314008, 325561, 314033, 325511, 325524, 314100, 314108, 283241, 314203, 325267, 325156, 283143, 324727, 324670, 324656, 324604, 314779, 324341, 315139, 315146, 324053, 324066, 315358, 323235, 323230, 323212, 323079, 323032, 316548, 316532, 316582, 316656, 316674, 316727, 316855, 316911, 317026, 317047, 317084, 317134, 364986, 321566, 321549, 321423, 321418, 317335, 317462, 317606, 321096, 365086, 317619, 317788, 317816, 320814, 320767, 320542, 320396, 319789, 319864, 317825, 282317, 318775, 282468, 637960, 655657, 638038, 622763, 612253, 629411, 638115, 638142, 612178, 638171, 612283, 638216, 622743, 638222, 637672, 620234, 655328, 612058, 655289, 655751, 612486, 628843, 655803, 620198, 622710, 615334, 654906, 654858, 629712, 612592, 638701, 654802, 638828, 629758, 654752, 656072, 638881, 602326, 654715, 612689, 620376, 602279, 611433, 654664, 654592, 629798, 612722, 629804, 612753, 639166, 639292, 639320, 656325, 656373, 611295, 656431, 629910, 623159, 620024, 623243, 623242, 629955, 653882, 620484, 640307, 640302, 653730, 653738, 636266, 640415, 610870, 601974, 653674, 640464, 620534, 640502, 640522, 653634, 653596, 610818, 640613, 640651, 619912, 610743, 620546, 610732, 653469, 628119, 610458, 615377, 636046, 610603, 628049, 603727, 627982, 635915, 635841, 623451, 619856, 653154, 601804, 630045, 631994, 610229, 610199, 635640, 656564, 601674, 657037, 610001, 641727, 627742, 657112, 652512, 627730, 619716, 641906, 641911, 610026, 641931, 657263, 657318, 642005, 642058, 609963, 642103, 642123, 657503, 601497, 657573, 604252, 613699, 601436, 627507, 630464, 657664, 657685, 657735, 627478, 651803, 634829, 630605, 642933, 634777, 651682, 609293, 623990, 634727, 643050, 634693, 634664, 651462, 651419, 651399, 624116, 651350, 627315, 627267, 651283, 624176, 643422, 624217, 627172, 630808, 643694, 651055, 651032, 643775, 619434, 650898, 619448, 644089, 644267, 626935, 644342, 626924, 626910, 626889, 658506, 605215, 658614, 658644, 608542, 631088, 631099, 608530, 626707, 644715, 608525, 658654, 605417, 608453, 605441, 633656, 649962, 618148, 605498, 633585, 605533, 605526, 649773, 618190, 658868, 618182, 618216, 614542, 621633, 619197, 649471, 605682, 605726, 645533, 618267, 618276, 619162, 608057, 618292, 605828, 645678, 608028, 626328, 649428, 605859, 600651, 659148, 649320, 614713, 645826, 645836, 626187, 631825, 605891, 626196, 619087, 600607, 626132, 600525, 626139, 626115, 626058, 619033, 606109, 607587, 618966, 648814, 625947, 648732, 625928, 631484, 648692, 648700, 646742, 607377, 659529, 646750, 646779, 632606, 632570, 646794, 631499, 648576, 648553, 615105, 631550, 618909, 631651, 618535, 632399, 632383, 625687, 618878, 607130, 625640, 615168, 625611, 631919, 606997, 647403, 647413, 647425, 632148, 606524, 647427, 647453, 647499, 625513, 648196, 618835, 648188, 625340, 648160, 606902, 648115, 648003, 606636, 625465, 647815, 647779, 606642, 609501, 418983, 436807, 442425, 436759, 436736, 419554, 436716, 436700, 396621, 436954, 397760, 368832, 446835, 368806, 419796, 419788, 379282, 445883, 419954, 398117, 398170, 398212, 437026, 396191, 442265, 419952, 396143, 442245, 396005, 396009, 398378, 379041, 445915, 442678, 378856, 380198, 380274, 380081, 442022, 420541, 395314, 395232, 380451, 420617, 380512, 420623, 399760, 399648, 399768, 418064, 399770, 420646, 399798, 417954, 445984, 380595, 417878, 380626, 394957, 420774, 442019, 393701, 429890, 380632, 394898, 394921, 380639, 380665, 400022, 400100, 378259, 420867, 417699, 420895, 380755, 417039, 380775, 435729, 378118, 428924, 442924, 368170, 428896, 417039, 380885, 400866, 400861, 400900, 401348, 401232, 430145, 443010, 443000, 401415, 417039, 367905, 401945, 393322, 367823, 367814, 377245, 393152, 377218, 393169, 421797, 421801, 421851, 443170, 402517, 402430, 428617, 392787, 434890, 443239, 434888, 370501, 402936, 370401, 367626, 438188, 392266, 367577, 403058, 403088, 446262, 434761, 392135, 392083, 443310, 434737, 370707, 415291, 434626, 434666, 370801, 370820, 370831, 446303, 443403, 370852, 391557, 438431, 391462, 443423, 438492, 370920, 370938, 443466, 371026, 390900, 430403, 438715, 375940, 375881, 405288, 405333, 423247, 405336, 405352, 414896, 375831, 405379, 375544, 405429, 414746, 414749, 434039, 390108, 405600, 366852, 389993, 423794, 366897, 423840, 423865, 371418, 439086, 371398, 414328, 389813, 389822, 414290, 428001, 406253, 406293, 427980, 427941, 406351, 406361, 427909, 427902, 446462, 406433, 406463, 389426, 439166, 446474, 371604, 444909, 443687, 446483, 371702, 431091, 424443, 406760, 413825, 439255, 406791, 406830, 375014, 406850, 443936, 433526, 439298, 439302, 424586, 374940, 374934, 433475, 407255, 413597, 443935, 371930, 388822, 443980, 431203, 407402, 388775, 388708, 388718, 371987, 444008, 388642, 424743, 424760, 374790, 427799, 424775, 372033, 374734, 431311, 372075, 388439, 388431, 427756, 413311, 372087, 374673, 374651, 388375, 388365, 388353, 407983, 439541, 387893, 366345, 366332, 408101, 424920, 433188, 374553, 439617, 374535, 413095, 383551, 427725, 408310, 433106, 425132, 374398, 412864, 412839, 374316, 425226, 383735, 383775, 412763, 374262, 408452, 374215, 439814, 412380, 387198, 432833, 412435, 374014, 439897, 446663, 372639, 386741, 439974, 386584, 440016, 386544, 409611, 386500, 409716, 386493, 384247, 409727, 409765, 386341, 373541, 409807, 427363, 409846, 431785, 409852, 386183, 446706, 384262, 446702, 425988, 409969, 410026, 386088, 431839, 386017, 384401, 385966, 385949, 385913, 385893, 384489, 440204, 385841, 384511, 385809, 385730, 427217, 411631, 385688, 385709, 385714, 385688, 411592, 411579, 411572, 426505, 411500, 384633, 411515, 411517, 411478, 410417, 410692, 411447, 431967, 365489, 446320, 499210, 519914, 449002, 507747, 480389, 500508, 490728, 519515, 454870, 493033, 525319, 512166, 481122, 519520, 525364, 512266, 455237, 504367, 490860, 462793, 462879, 481068, 493177, 464471, 504103, 447186, 519484, 493311, 490850, 493388, 519461, 450617, 504500, 452743, 493494, 493490, 519929, 462793, 455409, 515631, 503996, 455420, 474841, 464731, 519324, 464831, 464852, 447408, 475794, 464874, 475825, 493673, 475843, 511921, 464941, 503898, 490896, 464889, 450474, 520527, 450463, 470984, 503877, 481211, 512401, 480973, 489485, 504645, 493947, 462697, 470944, 474564, 489258, 462699, 515787, 489304, 503789, 513672, 465238, 489317, 474535, 489173, 516964, 474451, 515590, 452281, 452296, 474450, 476163, 511477, 450410, 476217, 481334, 481314, 465313, 511378, 474315, 488808, 465627, 465706, 474259, 476422, 450350, 488601, 511093, 523624, 476534, 503427, 205138, 459560, 474184, 459554, 503383, 459538, 453738, 474057, 450820, 520030, 453023, 476676, 495004, 503263, 520064, 453059, 473998, 510949, 503218, 512527, 470789, 515975, 507343, 510863, 495228, 487682, 495273, 503139, 519631, 460223, 520922, 487485, 487441, 521505, 462348, 454891, 452120, 510477, 466565, 466560, 495471, 487258, 491780, 452902, 470724, 462311, 487065, 487046, 510376, 510319, 486948, 510341, 466799, 495616, 466841, 477101, 477351, 463419, 510214, 477399, 486784, 460300, 486749, 466946, 463302, 486420, 462167, 519645, 460364, 460371, 453820, 477750, 496096, 524567, 516882, 502430, 502415, 460404, 514948, 448158, 477965, 502346, 514953, 516160, 451004, 524503, 524495, 524483, 478135, 478150, 448206, 478167, 481714, 448258, 513335, 457970, 496472, 524428, 521687, 514833, 456786, 461988, 485398, 496704, 473087, 515269, 451035, 492539, 448320, 453451, 453163, 485240, 516309, 491735, 453186, 453879, 519675, 516399, 524351, 453538, 509193, 461893, 460562, 468062, 478968, 460576, 516463, 468266, 468273, 506092, 500431, 479081, 481846, 456935, 468372, 468388, 484562, 451078, 481725, 479105, 457128, 492454, 449760, 520400, 451099, 463029, 497508, 484212, 497699, 506295, 517751, 448629, 457287, 516569, 448653, 472488, 468832, 500832, 451647, 468914, 454250, 453451, 483702, 479565, 513234, 523359, 516617, 460698, 523194, 454218, 516637, 524066, 365615, 460733, 524062, 525413, 524081, 483333, 520290, 460755, 491375, 470311, 471693, 483215, 499393, 491646, 520280, 457482, 461475, 516689, 472137, 453479, 479883, 483054, 479966, 461439, 522222, 482986, 480007, 498636, 451228, 506648, 508126, 469657, 508085, 453359, 476049, 480033, 523431, 458518, 508054, 458225, 508026, 490677, 507936, 514564, 469899, 460815, 516768, 458460, 482560, 507649, 482466, 469982, 460846, 516788, 480263, 506807, 525425, 480319, 544449, 556310, 570123, 570153, 570231, 570302, 554767, 570338, 535972, 589351, 570376, 570452, 570471, 535328, 566860, 535720, 570535, 535531, 570560, 570578, 536378, 536396, 597012, 554345, 536435, 566185, 536449, 554044, 554276, 535572, 600022, 566167, 554159, 599976, 589737, 589774, 553905, 536798, 553857, 561891, 536971, 561853, 589870, 589943, 589966, 589967, 553536, 571265, 588319, 537174, 566411, 569903, 598640, 590122, 590162, 561762, 528999, 569877, 566418, 596549, 553035, 590231, 529088, 566437, 552909, 552857, 552844, 596465, 569714, 552612, 596367, 572647, 596339, 561601, 528372, 552472, 552421, 538121, 596065, 525711, 538281, 598702, 538305, 561528, 573026, 573050, 573194, 538426, 573231, 534846, 573325, 534807, 573384, 538695, 573439, 534793, 538729, 573539, 573584, 573621, 573655, 586436, 573692, 586422, 534718, 551589, 586363, 534690, 586352, 551406, 573882, 586284, 561365, 586262, 586193, 586116, 595810, 586087, 586042, 586037, 585969, 595762, 551173, 551142, 585860, 551111, 534531, 557159, 569614, 590991, 585725, 529999, 550702, 585406, 574019, 585372, 585344, 591144, 585306, 550571, 574787, 557112, 574809, 574824, 550536, 541936, 595399, 550143, 574868, 585031, 527234, 569522, 591273, 584549, 569525, 574972, 595279, 540248, 575202, 575173, 575217, 597819, 540430, 595110, 540634, 549755, 549701, 591507, 549606, 540708, 540876, 540947, 591632, 549382, 533922, 549274, 594923, 548007, 533902, 533881, 584134, 533872, 533858, 559254, 559274, 583944, 533767, 533831, 541487, 569245, 555750, 576660, 565095, 576740, 576678, 555799, 591951, 565075, 564961, 555796, 576979, 583414, 576912, 528122, 564935, 577132, 558010, 592064, 564938, 577280, 577358, 594378, 583123, 569109, 547946, 577403, 577427, 533464, 531315, 531151, 533426, 594268, 527685, 594230, 533379, 577749, 582725, 594208, 555929, 527766, 577868, 564816, 582575, 526555, 531380, 582550, 533332, 564557, 542766, 555871, 542770, 531520, 533171, 582284, 527259, 582287, 578152, 556616, 578211, 564699, 542915, 578231, 555982, 582122, 582095, 556006, 544249, 581967, 581949, 593808, 543263, 593730, 543318, 533042, 531759, 556526, 556510, 543473, 527819, 581730, 581722, 581714, 568852, 532935, 581590, 556133, 581448, 581405, 527953, 597590, 531976, 532816, 581343, 581318, 597788, 568780, 545885, 568724, 526246, 568751, 566655, 597675, 556203, 579676, 580905, 545671, 580896, 580887, 580867, 592824, 564303, 527947, 592934, 532588, 580257, 545457, 592933, 545421, 559779, 556265, 580590, 593026, 568671, 568616, 544991, 560123, 233579, 212614, 270747, 252817, 261086, 204208, 266818, 266776, 239645, 261126, 266825, 206539, 270771, 266716, 252793, 204139, 252775, 273301, 206512, 266901, 235003, 241537, 266923, 252893, 242930, 281325, 252751, 252257, 222601, 277351, 225073, 203695, 209281, 212429, 270630, 261387, 278703, 209304, 261062, 234059, 234008, 261428, 212902, 204343, 261028, 244135, 212429, 222511, 267059, 267076, 208969, 266308, 212401, 266292, 234239, 225194, 232545, 209354, 209389, 266115, 222457, 217645, 201255, 203863, 222819, 233905, 243811, 225233, 275944, 244192, 281276, 257519, 217678, 209415, 208876, 261809, 241470, 222790, 208835, 255098, 233850, 232558, 272949, 239865, 253058, 217707, 212263, 278649, 200785, 200755, 279374, 239888, 234341, 241405, 208381, 239905, 258120, 257462, 222182, 208753, 201440, 246270, 232535, 255553, 224537, 230454, 265919, 213333, 255341, 255063, 204468, 281210, 234379, 201479, 226664, 271347, 213045, 204505, 241336, 255341, 231159, 275944, 217805, 237159, 276203, 237377, 239306, 278488, 258204, 262089, 265849, 227820, 200689, 200691, 208532, 253211, 212124, 273949, 262110, 255644, 262096, 255645, 270268, 257331, 212089, 212028, 276253, 271384, 230869, 253226, 225686, 213480, 271404, 206198, 227731, 270187, 271398, 258285, 228796, 271440, 204564, 247241, 270093, 276319, 217980, 200574, 241238, 201616, 201607, 275073, 252014, 247455, 211958, 225717, 213638, 272814, 239202, 198543, 251987, 211958, 270148, 218025, 265639, 240047, 278362, 219851, 257251, 198419, 271490, 213637, 204627, 258339, 254784, 251946, 222245, 271520, 241238, 271530, 265585, 207662, 241148, 270091, 276383, 219815, 281036, 251937, 233711, 267765, 228945, 220887, 228987, 276472, 229015, 271561, 232732, 267830, 241134, 240090, 253399, 221001, 257045, 251868, 227575, 257052, 280980, 246572, 247621, 280896, 262480, 271613, 231767, 262469, 262367, 240122, 269594, 240836, 281933, 271615, 221037, 236676, 204739, 258486, 262547, 255813, 253460, 253468, 265370, 236676, 255797, 229076, 281970, 243379, 227486, 269988, 253492, 258567, 269578, 221001, 208325, 229211, 262618, 254784, 242225, 211567, 242264, 271710, 232748, 208263, 242393, 213985, 231741, 219618, 268018, 268013, 227485, 282037, 225953, 214017, 221154, 216008, 258691, 218322, 242400, 211477, 219604, 208193, 211448, 229254, 253549, 225985, 246495, 233475, 265208, 282028, 278075, 208184, 278039, 219519, 253664, 215144, 265147, 232781, 253673, 265097, 246498, 200319, 201930, 265106, 268251, 271767, 259929, 222015, 204970, 232863, 229346, 218461, 242517, 235446, 201933, 242438, 268321, 235455, 223249, 240219, 208119, 253780, 233382, 264984, 253757, 273949, 214136, 211143, 221287, 234591, 262887, 210020, 238413, 259900, 208124, 231480, 259887, 282086, 210079, 255976, 268393, 205568, 269669, 238490, 240863, 200239, 242577, 210123, 282099, 240837, 221378, 277869, 263023, 277857, 242614, 280114, 227083, 271767, 280127, 280755, 205099, 269613, 236676, 231525, 208056, 236861, 269578, 258988, 277814, 268530, 242695, 233288, 238547, 238555, 274585, 264718, 229508, 236878, 268513, 245058, 229554, 263151, 207889, 280634, 229886, 264617, 268652, 277783, 277732, 242718, 263191, 259751, 253937, 207592, 264575, 280172, 246038, 268671, 200151, 256566, 256065, 259726, 246389, 256077, 277710, 233243, 202271, 240638, 221925, 242745, 259676, 263347, 200079, 218744, 229656, 264496, 235250, 233207, 263400, 253993, 254009, 264196, 218781, 207888, 244881, 245607, 254037, 243045, 244949, 238583, 214688, 238675, 207896, 233216, 214584, 207889, 226967, 234990, 244772, 254099, 254096, 277210, 215458, 254099, 207867, 274172, 234994, 280270, 215421, 235003, 244811, 7074, 200079, 210353, 207521, 277018, 244826, 214809, 272153, 238606, 214814, 240258, 272013, 233013, 246096, 263614, 237041, 207829, 198079, 277260, 246108, 221687, 246112, 233081, 221824, 205411, 269058, 229797, 272368, 254260, 233123, 221691, 269310, 277211, 280426, 221804, 223679, 205458, 238660, 218888, 277309, 215213, 269303, 277319, 242904, 229844, 254273, 280439, 223549, 235025, 229886, 261177, 206532
+
+Task 4.2 results end
+
+Task 4.3 code begin
+
+mapperPre.py:
+#!/usr/bin/python
+
+import sys
+
+questionType1 = 'PostTypeId="1"'
+questionType2 = 'PostTypeId="2"'
+
+for line in sys.stdin:
+    #if this log record is a question, then emit its acceptedanswerid
+    if questionType1 in line:
+        if 'AcceptedAnswerId' in line:
+            AcceptedAnswerId = line.strip().split('AcceptedAnswerId="',1)[1].split('"',1)[0]
+            print '%s\t%s' % (AcceptedAnswerId,0)
+    #if this log record is a answer, then emit its id and owneruserid
+    if questionType2 in line:
+        if 'Id' in line and 'OwnerUserId' in line:
+            AnswerId = line.strip().split('Id="',1)[1].split('"',1)[0]
+            OwnerUserId = line.strip().split('OwnerUserId="',1)[1].split('"',1)[0]
+            print '%s\t%s' % (AnswerId,OwnerUserId)
+
+reducerPre.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+preAnswerId,CurrentOwnerUserId = sys.stdin.readline().strip().split('\t')
+OwnerUserId = CurrentOwnerUserId
+count = 1
+for line in sys.stdin:
+    AnswerId,CurrentOwnerUserId = line.strip().split('\t')
+    #if the answerid is the same, update the owneruserid if the current owneruserid is not 0
+    if AnswerId == preAnswerId:
+        count = count + 1
+        if CurrentOwnerUserId != '0':
+            OwnerUserId = CurrentOwnerUserId
+    else:
+        #if we have find a pair of question and accepted answer, then output the owneruserid of this answer and id of this answer
+        if count > 1:
+            print '%s\t%s' % (OwnerUserId,preAnswerId)
+        count = 1
+        preAnswerId = AnswerId
+        OwnerUserId = CurrentOwnerUserId
+if count > 1:
+    print '%s\t%s' % (OwnerUserId,preAnswerId)
+
+mapper.py:
+#!/usr/bin/python
+
+import sys
+
+#emit the result from last reducer
+for line in sys.stdin:
+    print line.strip()
+
+reducer.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+preOwnerUserId,preAnswerId = sys.stdin.readline().strip().split('\t')
+count = 1
+AnswerIds = preAnswerId
+maxCount = 0
+maxAnswerIds = ''
+maxOwnerUserId = ''
+for line in sys.stdin:
+    OwnerUserId,AnswerId = line.strip().split('\t')
+    #mix all ids of answer of the same owneruserid
+    if OwnerUserId == preOwnerUserId:
+        count = count + 1
+        AnswerIds = AnswerIds + ', ' + AnswerId
+    #compare the number of answers with the maximum number of answer
+    #if it is bigger than that, update 
+    else:
+        if count > maxCount:
+            maxCount = count
+            maxAnswerIds = AnswerIds
+            maxOwnerUserId = preOwnerUserId
+    #start the statistics for the new owneruserid
+        count = 1
+        AnswerIds = AnswerId
+        preOwnerUserId = OwnerUserId
+#comparison of the last owneruserid
+if count > maxCount:
+    maxCount = count
+    maxAnswerIds = AnswerIds
+    maxOwnerUserId = preOwnerUserId
+#output the owneruserid which has the biggest number of answers
+print '%s\t%s' % (maxOwnerUserId,maxAnswerIds)
+
+mapperTop.py:
+#!/usr/bin/python
+
+import sys
+
+#emit the result from last reducer
+for line in sys.stdin:
+    print line.strip()
+
+reducerTop.py:
+#!/usr/bin/python
+
+import sys
+from operator import itemgetter
+
+maxCount = 0
+maxOwnerUserId = ''
+maxAnswerIds = ''
+for line in sys.stdin:
+    OwnerUserId,AnswerIds = line.strip().split('\t',1)
+    count = len(AnswerIds.split(','))
+    #find the owneruserid which has the biggest number of answers from 10 candidates
+    if count > maxCount:
+        maxCount = count
+        maxOwnerUserId = OwnerUserId
+        maxAnswerIds = AnswerIds
+#output the final result
+print maxOwnerUserId + '\t->\t' + str(maxCount) + ',\t' + maxAnswerIds
+
+running command:
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1250553/ex2/task3/stackLarge.txt -output /user/s1413178/data/output/assignment2/task4.3.1 -mapper mapperPre.py -file mapperPre.py -reducer reducerPre.py -file reducerPre.py
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task4.3.1 -output /user/s1413178/data/output/assignment2/task4.3.2 -mapper mapper.py -file mapper.py -reducer reducer.py -file reducer.py
+hadoop jar /opt/hadoop/hadoop-0.20.2/contrib/streaming/hadoop-0.20.2-streaming.jar -input /user/s1413178/data/output/assignment2/task4.3.2 -output /user/s1413178/data/output/assignment2/task4.3 -mapper mapperTop.py -file mapperTop.py -reducer reducerTop.py -file reducerTop.py -numReduceTasks 1
+
+Task 4.3 code end
+
+Task 4.3 results begin
+
+22656   ->      1097,   286645, 657175, 655311, 646780, 644287, 639328, 638121, 631560, 629833, 629428, 627213, 620544, 614587, 141528, 609529, 608043, 605866, 605776, 598063, 597686, 151950, 592078, 154524, 585373, 156838, 579721, 162750, 573628, 164398, 569920, 552478, 552469, 541506, 182767, 528411, 524578, 524514, 188130, 519682, 190254, 190308, 516342, 514768, 200784, 495012, 493735, 490909, 204744, 483231, 481350, 476554, 464971, 460858, 213582, 451696, 217993, 446476, 443956, 443433, 439311, 436738, 435045, 431319, 225255, 225967, 225994, 227569, 229134, 229558, 237685, 400908, 399811, 398155, 394960, 391576, 390072, 384529, 383782, 251904, 362640, 252831, 360255, 253795, 254109, 255072, 353154, 349384, 349267, 346215, 344055, 343380, 341977, 340554, 337143, 336838, 261813, 333840, 330177, 264478, 329106, 325542, 325308, 266764, 321104, 313590, 309766, 300008, 280236, 295627, 294259, 293908, 293269, 292747, 289363, 552915, 177840, 371736, 513684, 516636, 363627, 363582, 520046, 521144, 144189, 523368, 523449, 356977, 176274, 242586, 355806, 355644, 197299, 602342, 503928, 197181, 474480, 245006, 352421, 352133, 533420, 533448, 533907, 386514, 388369, 538227, 620225, 388378, 474859, 654868, 540530, 342099, 341865, 201266, 496620, 543500, 253962, 219654, 340028, 255113, 195615, 255834, 439317, 638848, 394948, 258219, 162323, 258499, 551600, 333404, 462023, 330533, 162774, 193879, 619461, 399772, 323261, 460746, 618886, 640692, 594973, 265031, 265130, 266319, 214712, 475830, 317097, 315369, 269325, 406359, 564949, 641916, 271575, 566659, 477333, 309636, 610767, 309528, 618192, 309005, 649611, 411597, 276255, 209448, 208683, 304541, 591165, 302129, 301977, 457146, 280160, 448272, 420894, 281358, 590166, 298332, 282113, 296794, 295597, 581355, 611315, 283491, 291357, 288090, 285101, 588330, 287217, 287190, 480357, 586440, 177561, 271529, 462725, 400039, 198576, 205117, 620396, 208150, 461465, 396026, 446499, 210139, 612700, 464886, 395306, 465281, 465731, 653183, 393173, 217691, 466974, 655668, 139841, 221209, 468873, 390158, 389871, 657585, 229670, 232621, 234016, 652580, 234395, 234999, 384416, 384335, 590237, 239903, 589950, 186155, 651824, 651428, 582137, 253619, 443258, 443203, 256085, 481724, 578222, 577430, 375803, 483001, 375074, 259695, 374750, 651338, 374426, 574659, 263177, 265599, 266282, 570365, 570347, 270106, 272393, 566180, 631934, 272960, 428624, 275129, 277767, 560131, 556622, 281285, 493055, 493956, 285849, 286613, 289520, 455417, 543329, 295145, 542933, 542852, 298287, 298313, 355300, 300409, 300418, 302038, 302317, 411523, 533339, 532952, 503387, 527778, 316925, 504683, 413864, 346346, 346085, 520568, 326104, 414764, 519506, 344555, 330640, 343862, 343691, 516897, 508094, 516581, 508157, 342016, 341062, 339894, 647432, 193740, 648169, 194307, 194514, 647502, 200165, 472506, 192615, 208202, 209319, 468934, 639196, 213710, 153744, 634867, 475828, 632003, 493387, 229849, 230063, 233303, 233943, 144069, 627757, 460824, 186685, 238669, 186667, 239316, 624192, 242763, 246101, 247623, 253473, 486781, 141468, 265885, 612267, 269070, 610674, 161565, 273318, 277873, 485296, 478177, 605832, 605544, 280167, 280293, 280446, 281049, 161484, 604293, 601485, 178990, 506184, 300074, 507958, 438739, 589778, 479095, 436957, 306131, 511223, 308689, 313115, 315186, 583440, 319911, 430160, 324078, 428956, 327462, 427993, 573568, 334815, 570606, 339937, 569554, 340566, 564973, 480039, 348045, 350178, 351032, 356118, 557133, 359449, 555955, 524436, 370842, 371508, 409876, 409722, 545064, 527965, 168414, 385972, 403070, 388834, 536451, 535731, 534570, 533878, 304484, 212512, 353435, 258585, 577365, 470976, 576762, 469978, 656114, 549762, 423806, 257540, 626964, 324356, 370580, 370742, 549618, 257252, 597660, 371525, 568789, 169872, 209002, 239252, 620519, 227598, 227525, 533066, 263633, 427370, 474198, 236705, 532841, 213403, 474288, 374801, 532607, 264740, 465648, 644757, 630635, 410684, 375837, 377259, 474468, 240665, 474585, 305168, 378140, 235067, 430709, 407417, 580794, 362804, 580910, 362732, 352210, 406841, 510953, 519530, 450482, 581432, 626207, 295160, 531338, 640517, 402944, 582567, 654756, 299526, 183696, 654684, 605787, 606641, 362453, 499407, 650921, 496167, 434697, 302378, 233492, 293919, 609981, 304664, 225077, 453920, 178197, 636062, 618927, 396159, 244805, 454299, 457999, 648122, 333671, 530014, 570588, 600016, 439232, 439584, 219001, 594276, 618161, 499218, 223709, 286520, 235459, 327312, 246394, 246114, 324090, 197191, 290656, 647795, 377263, 581464, 495622, 291114, 198136, 344377, 556039, 344340, 290340, 337366, 503839, 243054, 251974, 242910, 450856, 457084, 212283, 154710, 439633, 538714, 212094, 536996, 241380, 542791, 360180, 317034, 626121, 254908, 246529, 619859, 489548, 644095, 304821, 489421, 213651, 489386, 534826, 642970, 256636, 511489, 293897, 512550, 218485, 288802, 257059, 641944, 460350, 533836, 370828, 540649, 433116, 578242, 259732, 346735, 259985, 400888, 483067, 640350, 640323, 583958, 420633, 545437, 463078, 613738, 232803, 585415, 414315, 305163, 188993, 208756, 464851, 477406, 204354, 446671, 330363, 338761, 284905, 229023, 207711, 570493, 388793, 595298, 266301, 573445, 285184, 524106, 596396, 348977, 186003, 161965, 525420, 586397, 187048, 370936, 308962, 657703, 325161, 314010, 241291, 157213, 576795, 577451, 334595, 491591, 261073, 419807, 436817, 434963, 421868, 657696, 574814, 452945, 618202, 296985, 493201, 434053, 644366, 221383, 339798, 340174, 538751, 221941, 333217, 263080, 512335, 601813, 256079, 480313, 493517, 352441, 646805, 255656, 600571, 448661, 255638, 453188, 473122, 538508, 514964, 516999, 254053, 364024, 366905, 276455, 503434, 385814, 392096, 325739, 362332, 481853, 305362, 487695, 361397, 229006, 399774, 464861, 495281, 182620, 417485, 453557, 545483, 200142, 454312, 191189, 191170, 550586, 440047, 282548, 619210, 206227, 481079, 615115, 458417, 286445, 586280, 309791, 233236, 309944, 624151, 656336, 595415, 346772, 423875, 244838, 204508, 625538, 271928, 244153, 624223, 424612, 163261, 300493, 372061, 645833, 547968, 614738, 239663, 372648, 371946, 164270, 197247, 232616, 370811, 642116, 591979, 648192, 261146, 311717, 312275, 302492, 654735, 314138, 632162, 466815, 619013, 300511, 208136, 314831, 262631, 649786, 512471, 316578, 426008, 479983, 201449, 254333, 316659, 606549, 528041, 635934, 252803, 295248, 533289, 295040, 549714, 367923, 653907, 293907, 265214, 657156, 385851, 320834, 427737, 366339, 161787, 293268, 635664, 597045, 326667, 290216, 290063, 329141, 183260, 555979, 268536, 204581, 268662, 268699, 215462, 638049, 333254, 453071, 359634, 598738, 336396, 490863, 620246, 269625, 448635, 283269, 358716, 570170, 447429, 535782, 270173, 358653, 338042, 340526, 270641, 519537, 221852, 396011, 626150, 658669, 342272, 188148, 277266, 271415, 658713, 651062, 569541, 569253, 398217, 349428, 436764, 436773, 626367, 622749, 633602, 241670, 173333, 352631, 231536, 305412, 186613, 536461, 481237, 568655, 359215, 204009, 208221, 573217, 567223, 213450, 214693, 366352, 487097, 565054, 221695, 488816, 367829, 370942, 227833, 373804, 344635, 344400, 462733, 556522, 459566, 585313, 556009, 659177, 586105, 498644, 456811, 657214, 554308, 454895, 656387, 241143, 336797, 589805, 589940, 590137, 245077, 552887, 552850, 146167, 449035, 506310, 448333, 648818, 648106, 446722, 252790, 445886, 507904, 196117, 509290, 643110, 642030, 329209, 510388, 386099, 263257, 640537, 264643, 511413, 265994, 388448, 435797, 638233, 271447, 271645, 274615, 631834, 631672, 520413, 600667, 630826, 278521, 318698, 279395, 628072, 317608, 627767, 396629, 627514, 569627, 419975, 164455, 623211, 605338, 528172, 605554, 288827, 619108, 606913, 618596, 618226, 292994, 294145, 607147, 413106, 412774, 295748, 531321, 531772, 411586, 188017, 309076, 187793, 533473, 299177, 308040, 533888, 299979, 612772, 608470, 187432, 534850, 186550, 302172, 537190, 535651, 305764, 610837, 540887, 462235, 586210, 380786, 144085, 460390, 343507, 593799, 564845, 343552, 585897, 527837, 305257, 531986, 296780, 466574, 295754, 468392, 211161, 379058, 343886, 145516, 293891, 293143, 164650, 640426, 337171, 395320, 631552, 365017, 453370, 472153, 409982, 287627, 336433, 146227, 378266, 312277, 313069, 313131, 362443, 285809, 362119, 285368, 439925, 534802, 314130, 283676, 254010, 221322, 349736, 222079, 424453, 577300, 557186, 359339, 277790, 626936, 385727, 201630, 181462, 555818, 538295, 405733, 425245, 386267, 612067, 272830, 612193, 272164, 413329, 427919, 269320, 323220, 268600, 375926, 580702, 514840, 493501, 615389, 267836, 233149, 267089, 493420, 266846, 324616, 324661, 442282, 580928, 442480, 353065, 234751, 392800, 258999, 513346, 388742, 263416, 444000, 490739, 182515, 349259, 262101, 393179, 510358, 261067, 182696
+
+Task 4.3 results end
